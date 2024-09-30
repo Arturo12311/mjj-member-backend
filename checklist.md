@@ -23,7 +23,7 @@
 ## 3. Security & Validation 
 
 ### Admin Login
-- [ ] **Secure admin access using Flask-Login**  
+- [x] **Secure admin access using Flask-Login**  
   *Description*: Implement authentication for admin login, ensuring only authorized users can access the admin panel.  
   *Done when*: Only authenticated users can access the admin dashboard and other protected routes.
 

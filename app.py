@@ -1,7 +1,10 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, url_for, redirect, flash
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import UserMixin, LoginManager, login_user, logout_user, login_required
+from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
+app.secret_key = 'supersecretkey123'
 
 # Config for SQLAlchemy
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///bjj_gym.db'
@@ -10,7 +13,22 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 # Initialize the database
 db = SQLAlchemy(app)
 
-# Create a model
+# Initialize Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+@login_manager.user_loader
+def load_user(user_id):
+    return Admin.query.get(int(user_id))
+
+# Admin model
+class Admin(UserMixin, db.Model):
+    id       = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(100), unique=True, nullable=False)
+    password = db.Column(db.String(100), nullable=False)
+
+# Member model
 class Member(db.Model):
     id           = db.Column(db.Integer, primary_key=True)
     first_name   = db.Column(db.String(100), nullable=False)
@@ -22,14 +40,27 @@ class Member(db.Model):
 with app.app_context():
     db.create_all()
 
-# Basic route
-@app.route('/')
-def hello_world():
-    return 'Hello, World!'
+# Login route
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        data = request.form
+        admin = Admin.query.filter_by(username=data['username']).first()
+
+        if admin and check_password_hash(admin.password, data['password']):
+            login_user(admin)
+            return redirect(url_for('read_members'))
+        else:
+            flash('invalid credentials')
+            return redirect(url_for('login'))
+    
+    return render_template('login.html')
+
 
 # Create member route
 @app.route('/create_member', methods=['POST'])
-def add_member():
+@login_required
+def create_member():
     data = request.json
     new_member = Member(
         first_name   = data['first_name'],
@@ -43,7 +74,8 @@ def add_member():
 
 # Read members route
 @app.route('/read_members', methods=['GET'])
-def get_members():
+@login_required
+def read_members():
     members = Member.query.all()
     result = [
         {
@@ -58,6 +90,7 @@ def get_members():
 
 # Update member route
 @app.route('/update_member/<int:id>', methods=["PUT"])
+@login_required
 def update_member(id):
     member = Member.query.get(id) # Fetch member by ID
     if not member:
@@ -74,6 +107,7 @@ def update_member(id):
 
 # Delete member route
 @app.route('/delete_member/<int:id>', methods=['DELETE'])
+@login_required
 def delete_member(id):
     member = Member.query.get(id)
     if not member:
